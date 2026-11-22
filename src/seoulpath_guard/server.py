@@ -4,6 +4,8 @@ from datetime import date
 
 from mcp.server.fastmcp import FastMCP
 
+from seoulpath_guard.qa import checks as qa_checks
+from seoulpath_guard.rebalance import engine as rebalance_engine
 from seoulpath_guard.tools import barrier_free, cultural_events, seoul_rtd, topis, tourapi
 
 mcp = FastMCP('seoulpath-guard')
@@ -79,15 +81,20 @@ async def get_idle_events(
 
 
 @mcp.tool()
-def qa_itinerary(itinerary: dict) -> dict:
-    '''Validate a full itinerary for feasibility and closures.'''
-    raise NotImplementedError
+async def qa_itinerary(itinerary: dict, profile: dict | None = None) -> dict:
+    '''Validate an itinerary: visit times vs hours and rest days, barrier-free access for profile needs (wheelchair, stroller, elderly), congestion and traffic per stop, and schedule gaps (idle slots over 90 minutes). Input: itinerary {date: YYYY-MM-DD, stops: [{name, content_id, area_name, road, arrive: HH:MM, stay_minutes, travel_minutes_from_prev, restdate, usetime, lat, lon}]}, profile {needs: [wheelchair|stroller|elderly]}. Returns status, failures, warnings, remediation, and idle slots.'''
+    return await qa_checks.qa_itinerary(itinerary, profile)
 
 
 @mcp.tool()
-def rebalance_itinerary(itinerary: dict, constraints: dict | None = None) -> dict:
-    '''Repair an itinerary given live changes.'''
-    raise NotImplementedError
+async def rebalance_itinerary(
+    itinerary: dict,
+    triggers: list[dict] | None = None,
+    profile: dict | None = None,
+    candidates: list[dict] | None = None,
+) -> dict:
+    '''Repair an itinerary given live triggers. Trigger types: closed_venue (stop_index or content_id, reason), congestion (stop_index, level), traffic_incident (road or stop_index), barrier_free_violation (stop_index, needs), idle_gap (injects free cultural events into idle slots). Substitutes come from candidates (same shape as stops). Returns the new itinerary, a change list with explanations, injected events, unresolved items, and a post-rebalance QA report.'''
+    return await rebalance_engine.rebalance_itinerary(itinerary, triggers or [], profile or {}, candidates or [])
 
 
 if __name__ == '__main__':
